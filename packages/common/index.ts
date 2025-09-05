@@ -7,7 +7,7 @@ export interface SignupIncomingMessage {
 
 export interface ValidateIncomingMessage {
     callbackId: string;
-    signedMMessage: string;
+    signedMessage: string;
     status: "Good" | "Bad";
     latency: Number;
     websiteId: string;
