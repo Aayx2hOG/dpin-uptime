@@ -32,11 +32,8 @@ Bun.serve({
                     await signupHandler(ws, data.data);
                 }
             } else if (data.type === "validate") {
-                const callback = CALLBACKS[data.data.callbackId];
-                if (callback) {
-                    callback(data);
-                    delete CALLBACKS[data.data.callbackId];
-                }
+                CALLBACKS[data.data.callbackId]?.(data);
+                delete CALLBACKS[data.data.callbackId];
             }
         },
         async close(ws: ServerWebSocket<unknown>) {
