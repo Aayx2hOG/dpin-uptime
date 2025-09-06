@@ -61,7 +61,7 @@ async function validateHandler(ws: WebSocket, { url, callbackId, websiteId }: Va
             type: "validate",
             data: {
                 callbackId,
-                status: status === 200 ? "success" : "error",
+                status: status === 200 ? "Good" : "Bad",
                 latency,
                 websiteId,
                 validatorId,

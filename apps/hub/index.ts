@@ -1,14 +1,14 @@
-import { PublicKey } from "@solana/web3.js";
 import { randomUUIDv7, type ServerWebSocket } from "bun";
 import type { IncomingMessage, SignupIncomingMessage } from "common/types";
 import { prismaClient } from "db/client";
+import { PublicKey } from "@solana/web3.js";
 import nacl from "tweetnacl";
 import nacl_util from "tweetnacl-util";
 
 const availableValidators: { validatorId: string, socket: ServerWebSocket<unknown>, publicKey: string }[] = [];
 
-const CALLBACKS: { [callbackId: string]: (data: IncomingMessage) => void } = {};
-const COST_PER_VALIDATION = 100;
+const CALLBACKS: { [callbackId: string]: (data: IncomingMessage) => void } = {}
+const COST_PER_VALIDATION = 100; // in lamports
 
 Bun.serve({
     fetch(req, server) {
@@ -22,7 +22,8 @@ Bun.serve({
         async message(ws: ServerWebSocket<unknown>, message: string) {
             const data: IncomingMessage = JSON.parse(message);
 
-            if (data.type === "signup") {
+            if (data.type === 'signup') {
+
                 const verified = await verifyMessage(
                     `Signed message for ${data.data.callbackId}, ${data.data.publicKey}`,
                     data.data.publicKey,
@@ -31,7 +32,7 @@ Bun.serve({
                 if (verified) {
                     await signupHandler(ws, data.data);
                 }
-            } else if (data.type === "validate") {
+            } else if (data.type === 'validate') {
                 CALLBACKS[data.data.callbackId]?.(data);
                 delete CALLBACKS[data.data.callbackId];
             }
@@ -39,22 +40,22 @@ Bun.serve({
         async close(ws: ServerWebSocket<unknown>) {
             availableValidators.splice(availableValidators.findIndex(v => v.socket === ws), 1);
         }
-    }
-})
+    },
+});
 
 async function signupHandler(ws: ServerWebSocket<unknown>, { ip, publicKey, signedMessage, callbackId }: SignupIncomingMessage) {
     const validatorDb = await prismaClient.validator.findFirst({
         where: {
-            publicKey
+            publicKey,
         },
     });
 
     if (validatorDb) {
         ws.send(JSON.stringify({
-            type: "signup",
+            type: 'signup',
             data: {
                 validatorId: validatorDb.id,
-                callbackId
+                callbackId,
             },
         }));
 
@@ -66,36 +67,38 @@ async function signupHandler(ws: ServerWebSocket<unknown>, { ip, publicKey, sign
         return;
     }
 
+    //TODO: Given the ip, return the location
     const validator = await prismaClient.validator.create({
         data: {
             ip,
             publicKey,
-            location: "unknown",
+            location: 'unknown',
         },
     });
 
     ws.send(JSON.stringify({
-        type: "signup",
+        type: 'signup',
         data: {
             validatorId: validator.id,
-            callbackId
-        }
+            callbackId,
+        },
     }));
 
     availableValidators.push({
         validatorId: validator.id,
         socket: ws,
         publicKey: validator.publicKey,
-    })
+    });
 }
 
-async function verifyMessage(publicKey: string, message: string, signature: string) {
+async function verifyMessage(message: string, publicKey: string, signature: string) {
     const messageBytes = nacl_util.decodeUTF8(message);
     const result = nacl.sign.detached.verify(
         messageBytes,
         new Uint8Array(JSON.parse(signature)),
-        new PublicKey(publicKey).toBytes()
+        new PublicKey(publicKey).toBytes(),
     );
+
     return result;
 }
 
@@ -111,15 +114,15 @@ setInterval(async () => {
             const callbackId = randomUUIDv7();
             console.log(`Sending validate to ${validator.validatorId} ${website.url}`);
             validator.socket.send(JSON.stringify({
-                type: "validate",
+                type: 'validate',
                 data: {
                     url: website.url,
                     callbackId
-                }
+                },
             }));
 
             CALLBACKS[callbackId] = async (data: IncomingMessage) => {
-                if (data.type === "validate") {
+                if (data.type === 'validate') {
                     const { validatorId, status, latency, signedMessage } = data.data;
                     const verified = await verifyMessage(
                         `Replying to ${callbackId}`,
@@ -136,19 +139,16 @@ setInterval(async () => {
                                 websiteId: website.id,
                                 validatorId,
                                 status,
-                                latency: Number(latency),
-                                createdAt: new Date()
+                                // @ts-ignore
+                                latency,
+                                createdAt: new Date(),
                             },
                         });
 
                         await tx.validator.update({
-                            where: {
-                                id: validatorId
-                            },
+                            where: { id: validatorId },
                             data: {
-                                pendingPayouts: {
-                                    increment: COST_PER_VALIDATION
-                                },
+                                pendingPayouts: { increment: COST_PER_VALIDATION },
                             },
                         });
                     });
@@ -156,4 +156,4 @@ setInterval(async () => {
             };
         });
     }
-}, 1 * 60 * 1000);
+}, 60 * 1000);
