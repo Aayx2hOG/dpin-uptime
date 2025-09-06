@@ -7,6 +7,12 @@
     "@types/bun": "latest"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "^5",
+    "common": "*"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.98.4",
+    "tweetnacl": "^1.0.3",
+    "tweetnacl-util": "^0.15.1"
   }
 }
